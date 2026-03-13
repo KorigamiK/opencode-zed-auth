@@ -1,6 +1,20 @@
 {
   "name": "opencode-zed-auth",
   "version": "0.0.3",
+  "description": "OpenCode Zed Auth plugin to integrate Zed/OpenAI auth and token management.",
+  "homepage": "https://github.com/KorigamiK/opencode-zed-auth",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KorigamiK/opencode-zed-auth.git"
+  },
+  "bugs": { "url": "https://github.com/KorigamiK/opencode-zed-auth/issues" },
+  "keywords": [ "authentication", "auth", "zed", "openai", "opencode", "plugin", "ai", "token" ],
+  "license": "MIT",
+  "publishConfig": { "access": "public" },
+  "type": "module",
+  "exports": {
+    ".": "./index.mjs"
+  },
   "main": "./index.mjs",
   "scripts": {
     "bootstrap-config": "node ./script/bootstrap-config.mjs"
