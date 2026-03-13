@@ -17,7 +17,7 @@ OpenCode local plugin autoload works most reliably from a plain `.js` file under
 
 ```zsh
 mkdir -p ~/.opencode/plugins
-ln -sfn /home/origami/Dev/projects/javascript/opencode-zed-auth/index.mjs ~/.opencode/plugins/zed-auth.js
+ln -sfn index.mjs ~/.opencode/plugins/zed-auth.js
 ```
 
 ## One-Time Provider Bootstrap
@@ -27,8 +27,7 @@ There is one important local-dev caveat: OpenCode does not always apply a freshl
 If `opencode models zed` says `Provider not found: zed`, seed the provider entry once:
 
 ```zsh
-cd /home/origami/Dev/projects/javascript/opencode-zed-auth
-npm run bootstrap-config
+bun run bootstrap-config
 ```
 
 That writes `provider.zed` into `~/.opencode/opencode.json` using the plugin's own `config()` hook.
@@ -59,17 +58,6 @@ To inspect the local Zed credential:
 secret-tool search --all --unlock url https://zed.dev
 ```
 
-## Full Model Catalog
-
-The plugin seeds a bootstrap `zed/gpt-5-nano` model so the provider can exist before auth succeeds.
-
-Once auth works, the loader now performs a one-time authenticated `/models` refresh when it only sees the bootstrap catalog. That means:
-
-- the first authenticated `opencode models zed` may take a little longer
-- that first call may still print only the bootstrap snapshot, because OpenCode appears to list models from an earlier config snapshot
-- during that same call, the plugin persists the full Zed catalog into `~/.opencode/opencode.json`
-- the next `opencode models zed` should show the full Zed catalog immediately
-
 ## Debugging
 
 Enable plugin logs with:
@@ -85,17 +73,4 @@ Useful checks:
 opencode auth list
 opencode models zed
 opencode run -m zed/gpt-5-nano "say hello in one short sentence"
-```
-
-## Known Caveats
-
-- Zed `/completions` is a live newline-delimited JSON stream, not SSE. The plugin converts it into SSE for OpenCode.
-- `opencode run --format json` can look more buffered than the interactive UI even when the bridge is streaming correctly.
-- Invalid model `status` values in `~/.opencode/opencode.json` can break provider loading. This plugin no longer writes `status: "active"` to persisted config.
-- If the user signs out of Zed desktop or their local credential rotates, the plugin can still refresh the short-lived LLM token, but it cannot magically refresh the base desktop credential. Re-auth in Zed and log in again through OpenCode if that happens.
-
-## Updating
-
-```zsh
-./script/publish.ts
 ```
