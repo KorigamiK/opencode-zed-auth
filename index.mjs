@@ -249,7 +249,6 @@ function buildOpenCodeModel(zedModel) {
     id: zedModel.id,
     providerID: "zed",
     api: { id: zedModel.id, npm: spec.npm, url: spec.baseURL },
-    status: "active",
     name: zedModel.display_name || zedModel.id,
     family: familyFromModelId(zedModel.id),
     capabilities: {
@@ -339,9 +338,13 @@ function mergePersistedModelConfig(generatedModel, existingModel = {}) {
 }
 
 function mergeOpenCodeModel(baseModel, model) {
+  const { status: _ignoredStatus, ...modelWithoutStatus } = isObject(model) ? model : {};
+  const mergedStatus = typeof model?.status === "string" && model.status !== "active" ? model.status : baseModel.status;
+
   return {
     ...baseModel,
-    ...model,
+    ...modelWithoutStatus,
+    ...(mergedStatus ? { status: mergedStatus } : {}),
     api: merge(baseModel.api, model?.api),
     capabilities: {
       ...baseModel.capabilities,
@@ -374,6 +377,11 @@ function mergeBootstrapModels(existingModels = {}) {
   );
 }
 
+function isBootstrapOnlyCatalog(models = {}) {
+  const modelIds = Object.keys(models);
+  return modelIds.length === 0 || (modelIds.length === 1 && modelIds[0] === "gpt-5-nano");
+}
+
 function buildRuntimeModelFromProviderModel(modelId, model) {
   const provider = zedProviderIdFromNpm(model?.api?.npm || model?.provider?.npm);
   return provider
@@ -393,6 +401,10 @@ function buildRuntimeModelFromProviderModel(modelId, model) {
 function hydrateRuntimeModelsFromProvider(provider, runtimeState) {
   if (!provider?.models) {
     return;
+  }
+
+  if (!isBootstrapOnlyCatalog(provider.models)) {
+    runtimeState.catalogLoaded = true;
   }
 
   for (const [modelId, model] of Object.entries(provider.models)) {
@@ -422,6 +434,8 @@ function rebuildProviderModels(provider, modelsResponse, runtimeState) {
   if (provider) {
     provider.models = models;
   }
+
+  runtimeState.catalogLoaded = Object.keys(models).length > 0;
 }
 
 const getPersistedConfigPath = () => path.join(homedir(), ".opencode", "opencode.json");
@@ -806,6 +820,7 @@ const createRuntimeState = () => ({
   organizationId: undefined,
   systemId: null,
   zedModelsById: new Map(),
+  catalogLoaded: false,
   lastRefreshKey: null,
   warmupTask: null,
 });
@@ -814,6 +829,7 @@ function resetRuntime(runtimeState, provider) {
   runtimeState.llmToken = null;
   runtimeState.organizationId = undefined;
   runtimeState.zedModelsById.clear();
+  runtimeState.catalogLoaded = false;
   hydrateRuntimeModelsFromProvider(provider, runtimeState);
 }
 
@@ -856,7 +872,7 @@ async function refreshRuntime(runtimeState, getAuth, provider, options = {}) {
   if (!runtimeState.llmToken || forceToken) {
     await ensureLlmToken(runtimeState, credentials, urls, preferredOrganizationId, systemId);
   }
-  if (refreshModels || runtimeState.zedModelsById.size === 0) {
+  if (refreshModels || runtimeState.zedModelsById.size === 0 || !runtimeState.catalogLoaded) {
     const modelsResponse = await listZedModels(runtimeState.llmToken, urls);
     rebuildProviderModels(provider, modelsResponse, runtimeState);
     await persistDiscoveredModels(provider, modelsResponse);
@@ -1003,11 +1019,18 @@ export async function ZedAuthPlugin() {
         });
 
         hydrateRuntimeModelsFromProvider(provider, runtimeState);
-        warmRuntime(runtimeState, getAuth, provider).catch((error) => {
+        const shouldAwaitCatalogLoad = !runtimeState.catalogLoaded;
+        warmRuntime(runtimeState, getAuth, provider, {
+          refreshModels: shouldAwaitCatalogLoad,
+        }).catch((error) => {
           debugLog("loader warmup failed", {
             message: error instanceof Error ? error.message : String(error),
           });
         });
+
+        if (shouldAwaitCatalogLoad) {
+          await runtimeState.warmupTask?.catch(() => {});
+        }
 
         debugLog("loader initialized", {
           modelCount: Object.keys(provider?.models || {}).length,
