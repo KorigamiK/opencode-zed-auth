@@ -4,26 +4,15 @@ import { $ } from "bun";
 const dir = new URL("..", import.meta.url).pathname;
 process.chdir(dir);
 
-const bumpType = process.argv[2] || "patch";
+const tag = process.argv[2] || "next";
+if (!["next", "latest"].includes(tag)) throw new Error("Usage: bun script/publish.ts [next|latest]");
 
-console.log(`Bumping ${bumpType} version...`);
-
-// Bump version in package.json
-await $`npm version ${bumpType} --no-git-tag-version`;
-
-// Read the new version
 const pkg = await Bun.file("./package.json").json();
 const version = pkg.version;
+const ref = (await $`git branch --show-current`.text()).trim();
+if (!ref) throw new Error("Choose a branch before publishing.");
+if ((await $`git status --porcelain`.text()).trim()) throw new Error("Commit and push your changes before publishing.");
 
-console.log(`New version: ${version}`);
-
-// Commit the version bump
-await $`git add package.json`;
-await $`git commit -m "Bump version to ${version}"`;
-await $`git push`;
-
-// Trigger GitHub workflow
-console.log(`Triggering publish workflow...`);
-await $`gh workflow run publish.yml -f bump="${bumpType}"`;
-
-console.log(`✓ Version bumped to ${version} and publish workflow triggered`);
+await $`npm test`;
+console.log(`Publishing ${version} from ${ref} with npm tag ${tag}; no version bump, commit, or push is performed.`);
+await $`gh workflow run publish.yml --ref ${ref} -f tag=${tag}`;
