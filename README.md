@@ -136,4 +136,6 @@ npm pack --dry-run
 
 Tests use fake credentials and mocked endpoints; they do not access Keychain or make billable model requests. For a live smoke test, connect explicitly and run a small prompt with one model from each supported family.
 
+Publishing uses [npm trusted publishing](https://docs.npmjs.com/trusted-publishers) with GitHub Actions OIDC, not an `NPM_TOKEN`. In the package's npm Settings → Trusted Publisher, authorize organization/user `KorigamiK`, repository `opencode-zed-auth`, workflow filename `publish.yml`, and **Allow npm publish**. The workflow has `id-token: write` and generates provenance automatically; do not add a long-lived token to it.
+
 After reviewing/merging a release, run **Publish to npm** in GitHub Actions on the intended ref. The workflow runs tests, checks the packed file list, and publishes the version already in `package.json`; it does not silently bump versions. Use the `next` tag to test a release without replacing `latest`.

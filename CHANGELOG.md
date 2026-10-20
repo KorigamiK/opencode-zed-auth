@@ -11,6 +11,7 @@ Breaking: requires OpenCode V2 (tested with 2.1.1), replacing the V1 plugin API.
 - Discover current Zed models and cache successful inventories by account and endpoint.
 - Preserve multi-provider completion routing, token refresh, reasoning, tools, cancellation, and UTF-8 streaming.
 - Update installation, migration, troubleshooting, package contents, bootstrap helper, tests, and release workflow for V2.
+- Publish from GitHub Actions using npm's token-free trusted publishing (OIDC), with automatic provenance.
 
 ## 0.0.4
 

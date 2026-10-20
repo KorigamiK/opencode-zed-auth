@@ -5,7 +5,7 @@
   "homepage": "https://github.com/KorigamiK/opencode-zed-auth",
   "repository": {
     "type": "git",
-    "url": "https://github.com/KorigamiK/opencode-zed-auth.git"
+    "url": "git+https://github.com/KorigamiK/opencode-zed-auth.git"
   },
   "bugs": {
     "url": "https://github.com/KorigamiK/opencode-zed-auth/issues"

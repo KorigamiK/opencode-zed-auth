@@ -17,16 +17,17 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.3.13"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
 
       - run: bun install --frozen-lockfile
 
@@ -37,5 +38,3 @@ jobs:
       - run: npm publish --access public --tag "$NPM_TAG"
         env:
           NPM_TAG: ${{ inputs.tag }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: false
