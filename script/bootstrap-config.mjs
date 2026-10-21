@@ -3,42 +3,62 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { applyEdits, modify, parse } from "jsonc-parser";
 
-import plugin from "../index.mjs";
-
-const configPath = path.join(homedir(), ".opencode", "opencode.json");
-
-async function main() {
-  let config = {};
-
-  try {
-    config = JSON.parse(await readFile(configPath, "utf8"));
-  } catch {}
-
-  const hooks = await plugin({
-    client: {},
-    project: {},
-    directory: process.cwd(),
-    worktree: process.cwd(),
-    serverUrl: new URL("http://localhost"),
-    $: null,
-  });
-
-  if (typeof hooks.config !== "function") {
-    throw new Error("The Zed plugin does not export a config hook.");
+export async function bootstrap(configDir = process.env.OPENCODE_CONFIG_DIR ||
+  path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "opencode")) {
+  let configPath = path.join(configDir, "opencode.json");
+  let text;
+  try { text = await readFile(configPath, "utf8"); } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    configPath = path.join(configDir, "opencode.jsonc");
+    try { text = await readFile(configPath, "utf8"); } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      configPath = path.join(configDir, "opencode.json");
+      text = "{}\n";
+    }
   }
-
-  await hooks.config(config);
-  await mkdir(path.dirname(configPath), { recursive: true });
-  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
-
-  console.log(`Wrote ${configPath}`);
-  console.log(`Providers: ${Object.keys(config.provider || {}).join(", ") || "(none)"}`);
-  console.log(`Zed models: ${Object.keys(config.provider?.zed?.models || {}).length}`);
-  console.log("Next step: run `opencode models zed` once with working auth to fetch and persist the full Zed catalog.");
+  const errors = [];
+  const config = parse(text, errors, { allowTrailingComma: true });
+  if (errors.length || !config || typeof config !== "object" || Array.isArray(config)) {
+    throw new Error(`Invalid config: ${configPath}. Refusing to overwrite it.`);
+  }
+  if (config.provider?.zed && !config.providers?.zed) {
+    throw new Error("Legacy provider.zed exists. Migrate that entry to V2 providers.zed first; this helper will not discard it.");
+  }
+  const set = (keys, value) => {
+    text = applyEdits(text, modify(text, keys, value, { formattingOptions: { insertSpaces: true, tabSize: 2 } }));
+  };
+  if (!config.$schema) set(["$schema"], "https://opencode.ai/config.json");
+  if (!config.providers?.zed) set(["providers", "zed"], {
+    name: "Zed",
+    package: "@opencode/ai/providers/openai/responses",
+    settings: { baseURL: "https://cloud.zed.dev", transport: "http", encoding: "none" },
+  });
+  const plugins = config.plugins ?? config.plugin ?? [];
+  if (!Array.isArray(plugins)) throw new Error("Expected a plugins array; refusing to overwrite it.");
+  const hasPlugin = plugins.some((plugin) => {
+    const name = typeof plugin === "string" ? plugin : plugin?.package;
+    return name === "opencode-zed-auth" || name?.startsWith("opencode-zed-auth@");
+  });
+  if (!config.plugins || !hasPlugin) {
+    set(["plugins"], hasPlugin ? plugins : [...plugins, "opencode-zed-auth"]);
+  }
+  await mkdir(configDir, { recursive: true });
+  if (text !== "{}\n") {
+    try { await writeFile(`${configPath}.zed-backup`, await readFile(configPath), { flag: "wx", mode: 0o600 }); }
+    catch (error) { if (!["ENOENT", "EEXIST"].includes(error.code)) throw error; }
+  }
+  await writeFile(configPath, text, { mode: 0o600 });
+  return configPath;
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  bootstrap().then((configPath) => {
+    console.log(`Configured ${configPath}. Next: /connect → Zed, then /models.`);
+  }).catch((error) => {
+    console.error(error.message);
+    process.exitCode = 1;
+  });
+}
