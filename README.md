@@ -11,16 +11,16 @@ Add the plugin to `~/.config/opencode/opencode.json` (or `.jsonc`), preserving y
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugins": ["opencode-zed-auth@0.1.0"]
+  "plugins": ["opencode-zed-auth@0.1.1"]
 }
 ```
 
 Restart/reload the OpenCode **server you actually use**, then open `/connect` → **Zed**. The plugin registers the provider and discovers the account's current models; you do not need to maintain a static model list.
 
-For a development checkout, run `bun install` and use the absolute entrypoint instead of the npm package:
+For a development checkout, run `bun install` and use the absolute package directory instead of the npm package:
 
 ```jsonc
-{ "plugins": ["/absolute/path/to/opencode-zed-auth/index.mjs"] }
+{ "plugins": ["/absolute/path/to/opencode-zed-auth"] }
 ```
 
 Do not also leave an older `zed-auth.js` in the auto-loaded `~/.config/opencode/plugins/` directory. Load **one copy** of this plugin. If you need an explicit provider entry, the optional `bun run bootstrap-config` helper adds a native V2 configuration without replacing unrelated settings or comments.
@@ -65,6 +65,7 @@ OpenCode V2 stores new credentials in its database. Legacy `auth.json` is migrat
 - Uses V2 provider transforms, integration auth methods, and provider-scoped native HTTP hooks.
 - Exchanges the saved Zed credential at `/client/llm_tokens`, then fetches the live `/models` catalog.
 - Refreshes the catalog on startup, account changes, and every five minutes. Successful inventories are cached in plugin storage by connection and endpoint, so a temporary outage does not hide newly discovered models after reload.
+- Credential status notifications and updates to unrelated accounts do not refetch the catalog. Routine discovery logs are silent unless `OPENCODE_ZED_DEBUG=1` is set.
 - Uses native OpenAI Responses, Anthropic, Gemini, and xAI protocol packages per model.
 - Wraps requests in Zed's `/completions` envelope and adapts newline-delimited JSON responses to SSE, preserving UTF-8, cancellation, tools, and reasoning items.
 - Refreshes expired LLM tokens once. A rejected desktop credential is marked **needs authentication** instead of opening Keychain or repeatedly retrying it.

@@ -54,7 +54,8 @@ export default Plugin.define({
     let sourceConnection;
     let stopped = false;
     let discoveryTask;
-    let refreshRequested = false;
+    let refreshRequested;
+    let discoveryCredentialKey;
     let loadedCacheKey;
     let blockedConnectionKey;
     const requests = new WeakMap();
@@ -121,10 +122,11 @@ export default Plugin.define({
       });
     }
 
-    async function refreshCatalog() {
+    async function refreshCatalog(credentialChangedOnly = false) {
       if (stopped) return;
       if (discoveryTask) {
-        refreshRequested = true;
+        // A scheduled refresh takes precedence over a credential notification.
+        refreshRequested = refreshRequested === false ? false : credentialChangedOnly;
         return discoveryTask;
       }
       const task = (async () => {
@@ -136,8 +138,21 @@ export default Plugin.define({
           const active = await credential();
           connection = active.connection;
           const { value } = active;
-          if (!value) return;
+          if (!value) {
+            discoveryCredentialKey = undefined;
+            return;
+          }
           const cacheKey = catalogCacheKey(connection, runtime.urls);
+          // credential.updated also covers status changes and other providers.
+          // Compare the resolved credential, excluding transient status, so our
+          // own status reports cannot trigger another discovery indefinitely.
+          const credentialKey = createHash("sha256").update(JSON.stringify([cacheKey, value])).digest("hex");
+          if (credentialChangedOnly && discoveryCredentialKey === credentialKey) return;
+          if (discoveryCredentialKey !== credentialKey) {
+            discoveryCredentialKey = credentialKey;
+            blockedConnectionKey = undefined;
+            runtime.authError = null;
+          }
           if (loadedCacheKey !== cacheKey) {
             loadedCacheKey = cacheKey;
             const cache = await ctx.storage.get(cacheKey);
@@ -159,8 +174,12 @@ export default Plugin.define({
           sourceConnection = connection;
           await ctx.storage.set(cacheKey, { version: 1, fetchedAt: Date.now(), models });
           await ctx.provider.reload();
-          await ctx.integration.connection.status({ integrationID: PROVIDER_ID, connection, status: undefined });
-          console.info(`[zed.auth] Loaded ${models.length} Zed models.`);
+          if (current.status) {
+            await ctx.integration.connection.status({ integrationID: PROVIDER_ID, connection: current, status: undefined });
+          }
+          if (process.env.OPENCODE_ZED_DEBUG === "1") {
+            console.info(`[zed.auth] Loaded ${models.length} Zed models.`);
+          }
         } catch (error) {
           if (stopped) return;
           if (error.status === 401) await reportAuthFailure(connection);
@@ -171,9 +190,10 @@ export default Plugin.define({
       discoveryTask = task;
       try { await task; } finally {
         if (discoveryTask === task) discoveryTask = undefined;
-        if (refreshRequested && !stopped) {
-          refreshRequested = false;
-          void refreshCatalog();
+        if (refreshRequested !== undefined && !stopped) {
+          const credentialChangedOnly = refreshRequested;
+          refreshRequested = undefined;
+          void refreshCatalog(credentialChangedOnly);
         }
       }
     }
@@ -225,11 +245,7 @@ export default Plugin.define({
         for await (const event of ctx.event.subscribe({ signal: controller.signal })) {
           if (event.type === "credential.updated" ||
               event.type === "credential.switched" && event.data.integrationID === PROVIDER_ID) {
-            if (event.type === "credential.switched") {
-              blockedConnectionKey = undefined;
-              runtime.authError = null;
-            }
-            void refreshCatalog();
+            void refreshCatalog(true);
           }
         }
       } catch (error) {

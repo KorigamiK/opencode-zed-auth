@@ -13,6 +13,6 @@ const ref = (await $`git branch --show-current`.text()).trim();
 if (!ref) throw new Error("Choose a branch before publishing.");
 if ((await $`git status --porcelain`.text()).trim()) throw new Error("Commit and push your changes before publishing.");
 
-await $`npm test`;
+await $`bun run test`;
 console.log(`Publishing ${version} from ${ref} with npm tag ${tag}; no version bump, commit, or push is performed.`);
 await $`gh workflow run publish.yml --ref ${ref} -f tag=${tag}`;

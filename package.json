@@ -1,6 +1,6 @@
 {
   "name": "opencode-zed-auth",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "OpenCode V2 plugin for Zed hosted AI: model discovery, safe credential import, and streaming completions.",
   "homepage": "https://github.com/KorigamiK/opencode-zed-auth",
   "repository": {
@@ -34,7 +34,7 @@
   "scripts": {
     "bootstrap-config": "node ./script/bootstrap-config.mjs",
     "test": "node --test",
-    "prepublishOnly": "npm test"
+    "prepublishOnly": "bun run test"
   },
   "dependencies": {
     "@opencode/plugin": "^2.1.1",

@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "opencode-anthropic-auth",
+      "name": "opencode-zed-auth",
       "dependencies": {
         "@opencode/plugin": "^2.1.1",
         "jsonc-parser": "^3.3.1",

@@ -22,5 +22,5 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - run: bun install --frozen-lockfile
-      - run: npm test
-      - run: npm pack --dry-run
+      - run: bun run test
+      - run: bun pm pack --dry-run
